@@ -1,0 +1,55 @@
+{
+  "sync_method": "git",
+  "ledger_path": "sync/ledger.json",
+  "heartbeat_interval": 300,
+  "cleanup_interval": 3600,
+  "node_timeout_hours": 24,
+  "low_battery_threshold": 20,
+  "low_battery_multiplier": 3,
+  
+  "git_repo": "origin",
+  "git_branch": "main",
+  "git_auto_setup": true,
+  
+  "rclone_remote": "remote:otatm/",
+  "rclone_config": "~/.config/rclone/rclone.conf",
+  
+  "syncthing_folder": "sync",
+  "syncthing_api_key": "",
+  "syncthing_url": "http://localhost:8384",
+  
+  "github_scan": {
+    "enabled": true,
+    "languages": ["python", "javascript", "go", "rust"],
+    "min_stars": 10,
+    "max_age_days": 365,
+    "labels": ["good first issue", "help wanted", "enhancement"],
+    "exclude_orgs": ["facebook", "google", "microsoft"],
+    "rate_limit_delay": 1
+  },
+  
+  "scoring": {
+    "weights": {
+      "stars": 0.3,
+      "activity": 0.2,
+      "complexity": 0.2,
+      "impact": 0.3
+    },
+    "min_score": 0.5,
+    "max_queue_size": 100
+  },
+  
+  "resources": {
+    "max_cpu_percent": 80,
+    "max_memory_mb": 1024,
+    "max_disk_mb": 500,
+    "work_directory": "work",
+    "temp_directory": "temp"
+  },
+  
+  "notifications": {
+    "enabled": false,
+    "webhook_url": "",
+    "events": ["task_completed", "node_offline", "error"]
+  }
+}
