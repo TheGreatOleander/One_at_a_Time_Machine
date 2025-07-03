@@ -48,5 +48,9 @@ state["updated_at"] = datetime.utcnow().isoformat() + "Z"
 with open(STATE_PATH, "w") as f:
     json.dump(state, f, indent=2)
 
+import subprocess
+subprocess.run(["python3", "scripts/generate_status_md.py"])
+
+
 print("✅ machine_state.json updated:")
 print(json.dumps(state, indent=2))
