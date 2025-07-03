@@ -215,3 +215,184 @@ class OTATMNode:
         
         # For now, just simulate work
         for i in range(5):
+            print(f"[OTATM] Working... {i+1}/5")
+            time.sleep(10)  # Simulate work
+        
+        # Create a simple result file
+        result_file = task_dir / "result.txt"
+        result_file.write_text(f"Task completed at {datetime.now()}\n")
+        
+        return True
+    
+    def _discover_tasks(self):
+        """Discover new tasks from GitHub"""
+        print("[OTATM] Discovering new tasks...")
+        
+        try:
+            # Search for issues across popular repositories
+            search_queries = [
+                "is:issue is:open label:bug",
+                "is:issue is:open label:enhancement", 
+                "is:issue is:open label:help-wanted"
+            ]
+            
+            new_tasks = []
+            
+            for query in search_queries:
+                tasks = self._search_github_issues(query)
+                new_tasks.extend(tasks)
+                
+                # Rate limiting
+                time.sleep(1)
+            
+            # Remove duplicates and score tasks
+            unique_tasks = list(set(new_tasks))
+            scored_tasks = self._score_tasks(unique_tasks)
+            
+            # Add high-scoring tasks to queue
+            high_priority = [task for task, score in scored_tasks if score > 0.5]
+            
+            if high_priority:
+                self.sync_manager.add_tasks_to_queue(high_priority)
+                print(f"[OTATM] Added {len(high_priority)} new tasks to queue")
+            
+        except Exception as e:
+            print(f"[OTATM] Error discovering tasks: {e}")
+    
+    def _search_github_issues(self, query, max_results=20):
+        """Search GitHub for issues"""
+        try:
+            api_url = "https://api.github.com/search/issues"
+            params = {
+                "q": query,
+                "sort": "updated",
+                "per_page": max_results
+            }
+            
+            headers = {}
+            if self.config.get("github_token"):
+                headers["Authorization"] = f"token {self.config['github_token']}"
+            
+            response = requests.get(api_url, params=params, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            return [item["html_url"] for item in data.get("items", [])]
+            
+        except Exception as e:
+            print(f"[OTATM] Error searching GitHub: {e}")
+            return []
+    
+    def _score_tasks(self, task_urls):
+        """Score tasks by potential impact"""
+        scored_tasks = []
+        
+        for task_url in task_urls:
+            try:
+                task_data = self._fetch_task_details(task_url)
+                if not task_data:
+                    continue
+                
+                score = self._calculate_task_score(task_data)
+                scored_tasks.append((task_url, score))
+                
+            except Exception as e:
+                print(f"[OTATM] Error scoring task {task_url}: {e}")
+                continue
+        
+        # Sort by score (highest first)
+        scored_tasks.sort(key=lambda x: x[1], reverse=True)
+        return scored_tasks
+    
+    def _calculate_task_score(self, task_data):
+        """Calculate task priority score"""
+        score = 0.0
+        
+        # Base score
+        score += 0.1
+        
+        # Label scoring
+        labels = [label["name"].lower() for label in task_data.get("labels", [])]
+        
+        for keyword in self.config.get("priority_keywords", []):
+            if keyword.lower() in labels:
+                score += 0.2
+        
+        for keyword in self.config.get("exclude_keywords", []):
+            if keyword.lower() in labels:
+                score -= 0.5
+        
+        # Engagement scoring
+        comments = task_data.get("comments", 0)
+        if comments > 0:
+            score += min(comments * 0.05, 0.3)
+        
+        # Repository popularity (if available)
+        # This would require additional API calls
+        
+        # Age scoring (newer issues get slight boost)
+        try:
+            created_at = datetime.fromisoformat(task_data["created_at"].replace('Z', '+00:00'))
+            age_days = (datetime.now(timezone.utc) - created_at).days
+            
+            if age_days < 7:
+                score += 0.1
+            elif age_days > 365:
+                score -= 0.1
+        except:
+            pass
+        
+        return max(0.0, min(1.0, score))
+    
+    def get_status(self):
+        """Get current node status"""
+        swarm_status = self.sync_manager.get_swarm_status()
+        network_health = self.heartbeat.get_network_health()
+        
+        return {
+            "device_id": self.sync_manager.device_id,
+            "current_task": self.current_task,
+            "swarm_status": swarm_status,
+            "network_health": network_health,
+            "uptime": time.time() - self.start_time if hasattr(self, 'start_time') else 0
+        }
+
+
+def main():
+    """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="One-at-a-Time Machine Node")
+    parser.add_argument("--config", default="config.json", help="Configuration file")
+    parser.add_argument("--status", action="store_true", help="Show status and exit")
+    parser.add_argument("--sync", action="store_true", help="Sync with network and exit")
+    parser.add_argument("--discover", action="store_true", help="Discover tasks and exit")
+    
+    args = parser.parse_args()
+    
+    # Initialize node
+    node = OTATMNode(args.config)
+    
+    if args.status:
+        status = node.get_status()
+        print(json.dumps(status, indent=2))
+        return
+    
+    if args.sync:
+        print("Syncing with network...")
+        success = node.sync_manager.sync_with_network()
+        print(f"Sync {'successful' if success else 'failed'}")
+        return
+    
+    if args.discover:
+        print("Discovering tasks...")
+        node._discover_tasks()
+        return
+    
+    # Start the node
+    node.start_time = time.time()
+    node.start()
+
+
+if __name__ == "__main__":
+    main()
